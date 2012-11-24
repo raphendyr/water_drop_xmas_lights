@@ -1,0 +1,3 @@
+[submodule "yaal"]
+	path = yaal
+	url = git@github.com:raphendyr/yaal.git
