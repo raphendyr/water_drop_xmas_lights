@@ -1,0 +1,3 @@
+elements-dir ../gschem library/footprints
+schematics controller.sch
+output-name controller
