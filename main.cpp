@@ -9,6 +9,7 @@
 using namespace yaal;
 using namespace yaal::arduino;
 
+#define LEDS 16
 
 BasicRGBLed<D1, D2, D0> rgb;
 
@@ -38,41 +39,44 @@ void copy(uint8_t* to, const uint8_t* from, uint8_t bytes) {
 
 inline
 void advance(uint8_t* data, uint8_t end) {
-    uint8_t value = data[0] >> 1, prev;
+    //uint8_t value = data[0] >> 1, prev;
+    uint8_t value, prev;
+    {
+        uint8_t n = data[0];
+        value = (n > 2) ? (n - (n >> 2) - 2) : 0;
+    }
     for (uint8_t i = 0; i <= end; i++) {
         prev = data[i];
         data[i] = value;
         value = prev;
     }
-    if (end == 15)
-        data[15] += prev >> 1;
+    if (end == LEDS-1)
+        data[LEDS-1] += prev >> 1;
 }
 
-#define LEDS 16
 
-int main(void) {
-
+void setup() {
     rgb.setup();
     spi.setup();
+}
 
-    for (;;) {
-        uint8_t state[LEDS] = {0xff};
+#define MAX 0x1f
 
-        for (uint8_t r = 0; r < LEDS+10; r++) {
-            uint8_t end = r < LEDS ? r : LEDS-1;
-            uint8_t e = (LEDS/2) - ((end > (LEDS/2) ? LEDS - end : end) >> (LEDS>16?2:1));
-            if (r)
-                advance(state, end);
+void loop() {
+    uint8_t state[LEDS] = {MAX};
 
-            uint8_t round[LEDS];
-            for (uint8_t j = 0; j < e; j++) {
-                copy(round, state, LEDS);
-                for (uint8_t i = 0; i < 255; i++) {
-                    write(round, LEDS);
-                }
+    for (uint8_t r = 0; r < LEDS+10; r++) {
+        uint8_t end = r < LEDS ? r : LEDS-1;
+        uint8_t e = 60 + (LEDS - LEDS/4) - ((end > (LEDS/2) ? LEDS - end : end) >> (LEDS>16?2:1));
+        if (r)
+            advance(state, end);
+
+        uint8_t round[LEDS];
+        for (uint8_t j = 0; j < e; j++) {
+            copy(round, state, LEDS);
+            for (uint8_t i = 0; i < MAX; i++) {
+                write(round, LEDS);
             }
         }
     }
-
-    return 0;
 }
