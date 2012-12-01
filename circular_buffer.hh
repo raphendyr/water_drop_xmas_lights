@@ -2,11 +2,21 @@
 #define __YAAL_CIRCULAR_BUFFER__ 1
 
 #include <inttypes.h>
+#include "type_traits.hh"
 
 // for api: http://www.boost.org/doc/libs/1_52_0/libs/circular_buffer/doc/circular_buffer.html
 
+
 template< uint8_t buffer_size, typename elem_t = uint8_t >
 class CircularBuffer {
+    typedef typename TypeTraits<elem_t>::on_input elem_t_on_input;
+    typedef typename TypeTraits<elem_t>::on_input elem_t_on_modify;
+
+public:
+    typedef elem_t element_type;
+    typedef uint8_t size_type;
+
+private:
     uint8_t tail;
     uint8_t head;
     uint8_t count;
@@ -46,6 +56,8 @@ class CircularBuffer {
 public:
     CircularBuffer() : tail(0), head(0), count(0) {}
 
+    /* Generic operations */
+
     // FIXME: better function name
     uint8_t freeSpace() const {
         return buffer_size - count;
@@ -67,22 +79,19 @@ public:
         return buffer_size;
     }
 
-    uint8_t clear() {
+    void clear() {
         head = 0;
         tail = 0;
         count = 0;
     }
 
-    void push_back(elem_t elem) {
-        buffer[head] = elem;
-        forward(head);
-        if (full())
-            forward(tail);
-        else
-            count++;
+    /* opers on front */
+
+    elem_t_on_modify front() {
+        return buffer[tail];
     }
 
-    void push_front(elem_t elem) {
+    void push_front(elem_t_on_input elem) {
         backward(tail);
         buffer[tail] = elem;
         if (full())
@@ -91,47 +100,81 @@ public:
             count++;
     }
 
-    elem_t pop_front() {
-        elem_t elem = buffer[tail];
+    void erase_front() {
         if (!empty()) {
             count--;
             forward(tail);
         }
+    }
+
+    elem_t pop_front() {
+        elem_t elem = front();
+        erase_front();
         return elem;
     }
 
-    elem_t pop_back() {
+    /* opers on back */
+
+    elem_t_on_modify back() {
+        uint8_t h = head;
+        backward(h);
+        return buffer[h];
+    }
+
+    void push_back(elem_t_on_input elem) {
+        buffer[head] = elem;
+        forward(head);
+        if (full())
+            forward(tail);
+        else
+            count++;
+    }
+
+    void erase_back() {
         if (!empty()) {
             count--;
             backward(head);
         }
+    }
+
+    elem_t pop_back() {
+        erase_back();
         return buffer[head];
     }
 
-    elem_t& at(uint8_t i) {
+    /* getters */
+
+    elem_t_on_modify at(uint8_t i) {
         return buffer[forward_modulo(tail, i)];
     }
 
-    const elem_t& at(uint8_t i) const {
+    const elem_t_on_modify at(uint8_t i) const {
         return buffer[forward_modulo(tail, i)];
     }
 
-    elem_t& operator[] (uint8_t i) {
+    elem_t_on_modify operator[] (uint8_t i) {
         return at(i);
     }
 
-    const elem_t& operator[] (uint8_t i) const {
+    const elem_t_on_modify operator[] (uint8_t i) const {
         return at(i);
     }
 
+    /* iterators */
 
-    // iters:
+    template<typename funktion_t>
+    inline
+    //YAAL_INLINE("CircularBuffer::foreach");
+    void foreach(funktion_t callback) {
+        for (uint8_t c = 0, e = count, i = tail; c < e; c++, forward(i)) {
+            callback(buffer[i]);
+        }
+    }
+
     // begin
     // end
     // rbegin
     // rend
-    // front
-    // back
 };
 
 #endif
