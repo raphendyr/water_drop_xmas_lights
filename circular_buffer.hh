@@ -3,12 +3,14 @@
 
 #include <inttypes.h>
 #include "type_traits.hh"
+#include "yaal/qualifiers.hh"
 
 // for api: http://www.boost.org/doc/libs/1_52_0/libs/circular_buffer/doc/circular_buffer.html
 
 
 template< uint8_t buffer_size, typename elem_t = uint8_t >
 class CircularBuffer {
+    typedef CircularBuffer<buffer_size, elem_t> self_type;
     typedef typename TypeTraits<elem_t>::on_input elem_t_on_input;
     typedef typename TypeTraits<elem_t>::on_input elem_t_on_modify;
 
@@ -163,14 +165,14 @@ public:
     /* iterators */
 
     template<typename funktion_t>
-    inline
-    //YAAL_INLINE("CircularBuffer::foreach");
+    YAAL_INLINE("CircularBuffer::foreach")
     void foreach(funktion_t callback) {
         for (uint8_t c = 0, e = count, i = tail; c < e; c++, forward(i)) {
-            callback(buffer[i]);
+            callback(c, buffer[i]);
         }
     }
 
+    // NOTE: Iterators might be not so optimal on avr?
     // begin
     // end
     // rbegin
