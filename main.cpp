@@ -14,6 +14,7 @@ using namespace yaal::arduino;
 
 #define LEDS 16
 #define BLOCKS (LEDS/8)
+#define DROP_END (LEDS + 10)
 #define MAX 0x1f
 
 BasicRGBLed<D1, D2, D0> rgb;
@@ -81,47 +82,54 @@ void update_state(drop_list_t& drops, uint8_t* state) {
     uint8_t drop_val;
 
     if (drops_i < drops_e) {
-        drop_t drop = drops[drops_i++];
+        drop_t& drop = drops[drops_i++];
         drop_at = drop.first();
         drop_val = drop.third();
     } else {
-        drop_at = LEDS;
+        drop_at = (uint8_t)-1;
     }
 
-    uint8_t i = LEDS;
+    uint8_t i = DROP_END;
     do {
         i--;
         if (i == drop_at) {
             val += drop_val;
             if (drops_i < drops_e) {
-                drop_t drop = drops[drops_i++];
+                drop_t& drop = drops[drops_i++];
                 drop_at = drop.first();
                 drop_val = drop.third();
             }
         } else if (val) {
             val = (val > 2) ? (val - (val >> 2) - 2) : 0;
         }
-        state[i] = val;
+        if (i < LEDS)
+            state[i] = val;
     } while (i > 0);
 }
 
 inline
 bool pass_time_on_drops(drop_list_t& drops) {
     bool change = false;
-    bool* change_p = &change;
+    uint8_t prev = DROP_END;
     if (!drops.empty()) {
-        drops.foreach([change_p](drop_t& drop) {
-            uint8_t time = drop.second();
-            time--;
+        drops.foreach([&](drop_list_t::size_type i, drop_t& drop) {
+            uint8_t time = --drop.second();
+            uint8_t location = drop.first();
             if (!time) {
-                drop.first()++;
-                time = drop.third() >> 2;
-                *change_p = true;
+                drop.first() = ++location;
+                drop.second() = drop.third() >> 2;
+                if (location > prev) {
+                    drop_t& p = drops[i - 1];
+                    drop_t t = p;
+                    p = drop;
+                    drop = t;
+                }
+                change = true;
             }
-            drop.second() = time;
+            prev = location;
         });
 
-        if (drops.front().first() >= LEDS)
+        if (drops.front().first() >= DROP_END)
             drops.erase_front();
     }
     return change;
