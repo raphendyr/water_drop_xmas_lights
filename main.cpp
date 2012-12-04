@@ -15,7 +15,7 @@ using namespace yaal::arduino;
 #define LEDS 16
 #define BLOCKS (LEDS/8)
 #define DROP_END (LEDS + 10)
-#define MAX 0x1f
+#define MAX (0xff >> 2)
 
 BasicRGBLed<D1, D2, D0> rgb;
 
@@ -26,7 +26,7 @@ typedef D15 Clock;
 SPI<Clock, Data, NullPin, Latch> spi;
 
 typedef Triple<uint8_t> drop_t;
-typedef CircularBuffer<4, drop_t> drop_list_t;
+typedef CircularBuffer<3, drop_t> drop_list_t;
 
 uint8_t random() {
     static uint8_t r;
@@ -39,20 +39,12 @@ uint8_t random() {
 }
 
 inline
-void write(uint8_t* data, uint8_t bits) {
-    LowPeriod<Latch> latch_low_for_this_block;
-    internal::shiftBitsIf<Clock, Data>(bits, [data](uint8_t i){
-        uint8_t value = data[i];
-        if (value)
-            data[i] = value - 1;
-        return value;
-    });
-}
-
-inline
-void copy(uint8_t* to, const uint8_t* from, uint8_t bytes) {
-    for (uint8_t i = 0; i < bytes; i++) {
-        *to++ = *from++;
+void pwmWrite(uint8_t* data, uint8_t bits, uint8_t top) {
+    for (uint8_t compare = 0; compare < top; compare++) {
+        LowPeriod<Latch> latch_low_for_this_block;
+        internal::shiftBitsIf<Clock, Data>(bits, [data, compare](uint8_t i){
+            return data[i] > compare;
+        });
     }
 }
 
@@ -93,12 +85,13 @@ void update_state(drop_list_t& drops, uint8_t* state) {
     do {
         i--;
         if (i == drop_at) {
-            val += drop_val;
-            if (drops_i < drops_e) {
+            do {
+                val += drop_val;
+
                 drop_t& drop = drops[drops_i++];
                 drop_at = drop.first();
                 drop_val = drop.third();
-            }
+            } while (i == drop_at && drops_i < drops_e);
         } else if (val) {
             val = (val > 2) ? (val - (val >> 2) - 2) : 0;
         }
@@ -137,12 +130,8 @@ bool pass_time_on_drops(drop_list_t& drops) {
 
 inline
 void display(uint8_t* state, uint8_t times) {
-    uint8_t round[LEDS];
     for (uint8_t j = 0; j < times; j++) {
-        copy(round, state, LEDS);
-        for (uint8_t i = 0; i < MAX; i++) {
-            write(round, LEDS);
-        }
+        pwmWrite(state, LEDS, MAX);
     }
 }
 
@@ -157,9 +146,9 @@ void main() {
         if (!next_in) {
             if (!drops.full()) {
                 next_in = random() >> 1;
-                uint8_t size = next_in & MAX;
-                if (size < 12)
-                    size = 12;
+                uint8_t size = next_in >> 1;
+                if (size < 15)
+                    size = 15;
                 drop_t drop(0, size >> 2, size);
                 drops.push_back(drop);
             }
