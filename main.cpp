@@ -16,12 +16,15 @@ using namespace yaal::arduino;
 #define BLOCKS (LEDS/8)
 #define DROP_END (LEDS + 10)
 #define MAX (0xff >> 2)
+#define BRIGNESS 20
 
 BasicRGBLed<D1, D2, D0> rgb;
 
 typedef D21 Latch;
 typedef D18 Data;
 typedef D15 Clock;
+
+PortB7 pwm;
 
 SPI<Clock, Data, NullPin, Latch> spi;
 
@@ -37,6 +40,29 @@ uint8_t random() {
     r = r2 | bit;
     return r;
 }
+
+
+inline void set_prigness(unsigned char);
+void set_prigness(unsigned char val) {
+	if (val > 255)
+		val = 255;
+	OCR0A = val;
+}
+
+inline void prigness_init(unsigned char);
+void prigness_init(unsigned char prigness) {
+	// 8 bit, => TOP = 255
+	// normal mode
+	// PB7
+	TCCR0A = _BV(COM0A1) | _BV(COM0A0) | _BV(WGM00) | _BV(WGM01);
+
+	set_prigness(prigness);
+
+	//TCCR0B |= _BV(CS01) | _BV(CS00); // 011, pre 64
+	TCCR0B |= _BV(CS02); // 100, pre 256
+	//TCCR0B |= _BV(CS02) | _BV(CS00); // 101, prw 1024
+}
+
 
 inline
 void pwmWrite(uint8_t* data, uint8_t bits, uint8_t top) {
@@ -173,6 +199,9 @@ void main() {
 void setup() {
     rgb.setup();
     spi.setup();
+
+    pwm.mode = OUTPUT;
+    prigness_init(BRIGNESS);
 }
 
 
