@@ -12,11 +12,14 @@
 using namespace yaal;
 using namespace yaal::arduino;
 
-#define LEDS 16
+#define LEDS 32
 #define BLOCKS (LEDS/8)
 #define DROP_END (LEDS + 10)
-#define MAX (0xff >> 2)
-#define BRIGNESS 20
+//#define MAX (0xff >> 3)
+#define MAX 20
+#define BRIGNESS 220
+#define DROP_FASTEST 1
+#define DROP_SLOWEST 4
 
 BasicRGBLed<D1, D2, D0> rgb;
 
@@ -29,7 +32,7 @@ PortB7 pwm;
 SPI<Clock, Data, NullPin, Latch> spi;
 
 typedef Triple<uint8_t> drop_t;
-typedef CircularBuffer<3, drop_t> drop_list_t;
+typedef CircularBuffer<6, drop_t> drop_list_t;
 
 uint8_t random() {
     static uint8_t r;
@@ -58,8 +61,10 @@ void prigness_init(unsigned char prigness) {
 
 	set_prigness(prigness);
 
+    TCCR0B |= _BV(CS00); // 010, pre 1
+    //TCCR0B |= _BV(CS01); // 010, pre 8
 	//TCCR0B |= _BV(CS01) | _BV(CS00); // 011, pre 64
-	TCCR0B |= _BV(CS02); // 100, pre 256
+	//TCCR0B |= _BV(CS02); // 100, pre 256
 	//TCCR0B |= _BV(CS02) | _BV(CS00); // 101, prw 1024
 }
 
@@ -68,8 +73,14 @@ inline
 void pwmWrite(uint8_t* data, uint8_t bits, uint8_t top) {
     for (uint8_t compare = 0; compare < top; compare++) {
         LowPeriod<Latch> latch_low_for_this_block;
-        internal::shiftBitsIf<Clock, Data>(bits, [data, compare](uint8_t i){
-            return data[i] > compare;
+        uint8_t bit = 0, row = LEDS - 8;
+        internal::shiftBitsIf<Clock, Data>(bits, [data, compare, &bit, &row](uint8_t i){
+            if (bit == 8) {
+                bit = 0;
+                row -= 16;
+            }
+            bit++;
+            return data[row++] > compare;
         });
     }
 }
@@ -136,7 +147,9 @@ bool pass_time_on_drops(drop_list_t& drops) {
             uint8_t location = drop.first();
             if (!time) {
                 drop.first() = ++location;
-                drop.second() = drop.third() >> 2;
+                //drop.second() = drop.third() >> 2;
+                //drop.second() = DROP_SLOWEST;
+                drop.second() = (drop.third() & 0x3) + 1;
                 if (location > prev) {
                     drop_t& p = drops[i - 1];
                     drop_t t = p;
@@ -165,17 +178,20 @@ void display(uint8_t* state, uint8_t times) {
 void main() {
     drop_list_t drops;
     uint8_t state[LEDS];
-    uint8_t next_in = 1;
+    uint8_t next_in = 0;
    
     for (;;) {
         // when next drop comes?
         if (!next_in) {
             if (!drops.full()) {
-                next_in = random() >> 1;
-                uint8_t size = next_in >> 1;
-                if (size < 15)
-                    size = 15;
-                drop_t drop(0, size >> 2, size);
+                next_in = random() >> 2;
+                uint8_t size = next_in;
+                while (size > MAX) size -= MAX;
+                if (size < 5)
+                    size = 5;
+                //uint8_t speed = size >> 2;
+                uint8_t speed = (size & 0x3) + 1;
+                drop_t drop(0, speed, size);
                 drops.push_back(drop);
             }
         } else {
@@ -201,6 +217,7 @@ void setup() {
     spi.setup();
 
     pwm.mode = OUTPUT;
+    //pwm = true;
     prigness_init(BRIGNESS);
 }
 
