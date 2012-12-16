@@ -102,8 +102,8 @@ public:
             count++;
     }
 
-    void erase_front() {
-        if (!empty()) {
+    void erase_front(uint8_t n = 1) {
+        while (n-- && !empty()) {
             count--;
             forward(tail);
         }
@@ -132,8 +132,8 @@ public:
             count++;
     }
 
-    void erase_back() {
-        if (!empty()) {
+    void erase_back(uint8_t n = 1) {
+        while (n-- && !empty()) {
             count--;
             backward(head);
         }
@@ -144,7 +144,7 @@ public:
         return buffer[head];
     }
 
-    /* getters */
+    /* random access */
 
     elem_t_on_modify at(uint8_t i) {
         return buffer[forward_modulo(tail, i)];
