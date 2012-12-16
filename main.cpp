@@ -73,6 +73,7 @@ inline
 void pwmWrite(uint8_t* data, uint8_t bits, uint8_t top) {
     for (uint8_t compare = 0; compare < top; compare++) {
         LowPeriod<Latch> latch_low_for_this_block;
+        /*
         uint8_t bit = 0, row = LEDS - 8;
         internal::shiftBitsIf<Clock, Data>(bits, [data, compare, &bit, &row](uint8_t i){
             if (bit == 8) {
@@ -81,6 +82,10 @@ void pwmWrite(uint8_t* data, uint8_t bits, uint8_t top) {
             }
             bit++;
             return data[row++] > compare;
+        });
+        */
+        internal::shiftBitsIf<Clock, Data>(bits, [data, compare](uint8_t i){
+            return data[i] > compare;
         });
     }
 }
@@ -132,8 +137,10 @@ void update_state(drop_list_t& drops, uint8_t* state) {
         } else if (val) {
             val = (val > 2) ? (val - (val >> 2) - 2) : 0;
         }
-        if (i < LEDS)
-            state[i] = val;
+        if (i < LEDS) {
+            uint8_t place = (i / 8) * 8 + (8 - i % 8) - 1;
+            state[place] = val;
+        }
     } while (i > 0);
 }
 
