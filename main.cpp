@@ -13,7 +13,7 @@
 using namespace yaal;
 using namespace yaal::arduino;
 
-//#define TOP_TO_BOTTOM
+#define TOP_TO_BOTTOM
 
 #define LEDS 32
 #define BLOCKS (LEDS/8)
