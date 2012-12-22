@@ -20,17 +20,24 @@ using namespace yaal::arduino;
 #define DROP_END (LEDS + 10)
 //#define MAX (0xff >> 3)
 #define MAX 31
-#define BRIGNESS 230 // 220
+#define BRIGNESS 25
 #define DROP_FASTEST 1
 #define DROP_SLOWEST 4
 
-typedef D21 Latch;
-typedef D18 Data;
-typedef D15 Clock;
+FUSES __attribute__((used)) = {
+    (FUSE_CKSEL1 & FUSE_CKSEL2 & FUSE_CKSEL3 & FUSE_SUT0 & FUSE_CKDIV8),
+    HFUSE_DEFAULT,
+    EFUSE_DEFAULT,
+};
 
-PortB7 pwm;
+typedef PortB3 Latch;
+typedef PortB0 Serial;
+typedef PortB2 Clock;
+typedef PortB4 OutputEnable;
 
-SPI<Clock, Data, NullPin, Latch> spi;
+OutputEnable pwm;
+
+SPI<Clock, Serial, NullPin, Latch> spi;
 
 //typedef Triple<uint8_t> Drop;
 typedef CircularBuffer<6, Drop> drop_list_t;
@@ -50,23 +57,24 @@ inline void set_prigness(unsigned char);
 void set_prigness(unsigned char val) {
 	if (val > 255)
 		val = 255;
-	OCR0A = val;
+	OCR1B = val;
 }
 
 inline void prigness_init(unsigned char);
 void prigness_init(unsigned char prigness) {
 	// 8 bit, => TOP = 255
 	// normal mode
-	// PB7
-	TCCR0A = _BV(COM0A1) | _BV(COM0A0) | _BV(WGM00) | _BV(WGM01);
+	// clear on match, set on 00 == 1, 0
+	// set on match, clear on  00 == 1, 1
+	GTCCR = _BV(PWM1B) | _BV(COM1B1) /*| _BV(COM1B0) */;
 
 	set_prigness(prigness);
 
-    TCCR0B |= _BV(CS00); // 010, pre 1
-    //TCCR0B |= _BV(CS01); // 010, pre 8
-	//TCCR0B |= _BV(CS01) | _BV(CS00); // 011, pre 64
-	//TCCR0B |= _BV(CS02); // 100, pre 256
-	//TCCR0B |= _BV(CS02) | _BV(CS00); // 101, prw 1024
+    TCCR1 |= _BV(CS10); // 010, pre 1
+    //TCCR1 |= _BV(CS11); // 010, pre 2
+	//TCCR1 |= _BV(CS11) | _BV(CS00); // 011, pre 4
+	//TCCR1 |= _BV(CS12); // 100, pre 8
+	//TCCR1 |= _BV(CS12) | _BV(CS00); // 101, prw 16
 }
 
 
@@ -76,11 +84,11 @@ void pwmWrite(uint8_t* data, uint8_t bits, uint8_t top) {
         LowPeriod<Latch> latch_low_for_this_block;
 #ifdef TOP_TO_BOTTOM
         uint8_t bit = LEDS - 1;
-        internal::shiftBitsIf<Clock, Data>(bits, [data, compare, &bit](uint8_t){
+        internal::shiftBitsIf<Clock, Serial>(bits, [data, compare, &bit](uint8_t){
             return data[bit--] > compare;
         });
 #else
-        internal::shiftBitsIf<Clock, Data>(bits, [data, compare](uint8_t i){
+        internal::shiftBitsIf<Clock, Serial>(bits, [data, compare](uint8_t i){
             return data[i] > compare;
         });
 #endif
