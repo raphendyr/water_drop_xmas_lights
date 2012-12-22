@@ -6,18 +6,22 @@
 #include "yaal/communication/spi.hh"
 #include <util/delay.h>
 
+// with triple 976 bytes
 #include "triple.hh"
+#include "drop.hh"
 #include "circular_buffer.hh"
 
 using namespace yaal;
 using namespace yaal::arduino;
 
+//#define TOP_TO_BOTTOM
+
 #define LEDS 32
 #define BLOCKS (LEDS/8)
 #define DROP_END (LEDS + 10)
 //#define MAX (0xff >> 3)
-#define MAX 20
-#define BRIGNESS 220
+#define MAX 31
+#define BRIGNESS 230 // 220
 #define DROP_FASTEST 1
 #define DROP_SLOWEST 4
 
@@ -31,8 +35,8 @@ PortB7 pwm;
 
 SPI<Clock, Data, NullPin, Latch> spi;
 
-typedef Triple<uint8_t> drop_t;
-typedef CircularBuffer<6, drop_t> drop_list_t;
+//typedef Triple<uint8_t> Drop;
+typedef CircularBuffer<6, Drop> drop_list_t;
 
 uint8_t random() {
     static uint8_t r;
@@ -73,20 +77,16 @@ inline
 void pwmWrite(uint8_t* data, uint8_t bits, uint8_t top) {
     for (uint8_t compare = 0; compare < top; compare++) {
         LowPeriod<Latch> latch_low_for_this_block;
-        /*
-        uint8_t bit = 0, row = LEDS - 8;
-        internal::shiftBitsIf<Clock, Data>(bits, [data, compare, &bit, &row](uint8_t i){
-            if (bit == 8) {
-                bit = 0;
-                row -= 16;
-            }
-            bit++;
-            return data[row++] > compare;
+#ifdef TOP_TO_BOTTOM
+        uint8_t bit = LEDS - 1;
+        internal::shiftBitsIf<Clock, Data>(bits, [data, compare, &bit](uint8_t){
+            return data[bit--] > compare;
         });
-        */
+#else
         internal::shiftBitsIf<Clock, Data>(bits, [data, compare](uint8_t i){
             return data[i] > compare;
         });
+#endif
     }
 }
 
@@ -112,15 +112,15 @@ void update_state(drop_list_t& drops, uint8_t* state) {
     uint8_t val = 0;
     uint8_t drops_i = 0;
     uint8_t drops_e = drops.size();
-    uint8_t drop_at;
-    uint8_t drop_val;
+    uint8_t drop_at, drop_mass;
 
     if (drops_i < drops_e) {
-        drop_t& drop = drops[drops_i++];
-        drop_at = drop.first();
-        drop_val = drop.third();
+        Drop& drop = drops[drops_i++];
+        drop_at = drop.location();
+        drop_mass = drop.mass();
     } else {
         drop_at = (uint8_t)-1;
+        drop_mass = 0;
     }
 
     uint8_t i = DROP_END;
@@ -128,17 +128,17 @@ void update_state(drop_list_t& drops, uint8_t* state) {
         i--;
         if (i == drop_at) {
             do {
-                val += drop_val;
+                val += drop_mass;
 
-                drop_t& drop = drops[drops_i++];
-                drop_at = drop.first();
-                drop_val = drop.third();
+                Drop& drop = drops[drops_i++];
+                drop_at = drop.location();
+                drop_mass = drop.mass();
             } while (i == drop_at && drops_i < drops_e);
         } else if (val) {
             val = (val > 2) ? (val - (val >> 2) - 2) : 0;
         }
         if (i < LEDS) {
-            uint8_t place = (i / 8) * 8 + (8 - i % 8) - 1;
+            uint8_t place = (i | 0x07) - (i & 0x07);
             state[place] = val;
         }
     } while (i > 0);
@@ -147,28 +147,24 @@ void update_state(drop_list_t& drops, uint8_t* state) {
 inline
 bool pass_time_on_drops(drop_list_t& drops) {
     bool change = false;
-    uint8_t prev = DROP_END;
+    uint8_t prev_loc = DROP_END;
     if (!drops.empty()) {
-        drops.foreach([&](drop_list_t::size_type i, drop_t& drop) {
-            uint8_t time = --drop.second();
-            uint8_t location = drop.first();
-            if (!time) {
-                drop.first() = ++location;
-                //drop.second() = drop.third() >> 2;
-                //drop.second() = DROP_SLOWEST;
-                drop.second() = (drop.third() & 0x3) + 1;
-                if (location > prev) {
-                    drop_t& p = drops[i - 1];
-                    drop_t t = p;
-                    p = drop;
-                    drop = t;
-                }
+        drops.foreach([&](drop_list_t::size_type i, Drop& drop) {
+            if (drop.time_step()) {
                 change = true;
+                if (drop.location() == prev_loc) {
+                    Drop& prev = drops[i - 1];
+                    uint8_t speed = ( drop.speed() + prev.speed() ) >> 1;
+                    prev.speed() = speed;
+                    prev.delay() = speed;
+                    drop.speed() = speed;
+                    drop.delay() = speed;
+                }
             }
-            prev = location;
+            prev_loc = drop.location();
         });
 
-        if (drops.front().first() >= DROP_END)
+        while (!drops.empty() && drops.front().location() >= DROP_END)
             drops.erase_front();
     }
     return change;
@@ -198,7 +194,7 @@ void main() {
                     size = 5;
                 //uint8_t speed = size >> 2;
                 uint8_t speed = (size & 0x3) + 1;
-                drop_t drop(0, speed, size);
+                Drop drop(speed, size);
                 drops.push_back(drop);
             }
         } else {
