@@ -2,7 +2,6 @@
 #define ARDUINO_teensy
 
 #include "yaal/arduino.hh"
-#include "yaal/devices/rgbled.hh"
 #include "yaal/communication/spi.hh"
 #include <util/delay.h>
 
@@ -24,8 +23,6 @@ using namespace yaal::arduino;
 #define BRIGNESS 230 // 220
 #define DROP_FASTEST 1
 #define DROP_SLOWEST 4
-
-BasicRGBLed<D1, D2, D0> rgb;
 
 typedef D21 Latch;
 typedef D18 Data;
@@ -204,9 +201,7 @@ void main() {
         // work on drops
         bool change = pass_time_on_drops(drops);
         if (change) {
-            rgb.green();
             update_state(drops, state);
-            rgb.off();
         }
     
         // lets now display it ;)
@@ -216,7 +211,6 @@ void main() {
 
 
 void setup() {
-    rgb.setup();
     spi.setup();
 
     pwm.mode = OUTPUT;
