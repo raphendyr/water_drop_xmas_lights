@@ -1,7 +1,7 @@
 #ifndef __DROP__
 #define __DROP__ 1
 
-#include "type_traits.hh"
+#include "yaal/types/traits.hh"
 
 class Drop {
     uint8_t _location;

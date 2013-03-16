@@ -5,10 +5,10 @@
 #include "yaal/communication/spi.hh"
 #include <util/delay.h>
 
-// with triple 976 bytes
-#include "triple.hh"
 #include "drop.hh"
-#include "circular_buffer.hh"
+#include "yaal/types/circular_buffer.hh"
+#include "yaal/types/triple.hh"
+// with triple 976 bytes
 
 using namespace yaal;
 using namespace yaal::arduino;
